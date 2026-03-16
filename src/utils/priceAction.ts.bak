@@ -1,0 +1,1219 @@
+import { Candle, TrendStrength, SupportResistance, PatternResult, Signal, TradeRecommendation, PriceActionAnalysis, PatternLocation, PatternPoint } from '../types';
+
+/**
+ * 价格行为分析工具类
+ * 基于阿尔布鲁克斯价格行为学理论
+ */
+export class PriceActionAnalyzer {
+  private candles: Candle[];
+
+  constructor(candles: Candle[]) {
+    this.candles = candles;
+  }
+
+  /**
+   * 分析趋势强度
+   */
+  analyzeTrend(): TrendStrength {
+    if (this.candles.length < 20) {
+      return { type: 'sideways', strength: 0, rating: 1 };
+    }
+
+    const recentCandles = this.candles.slice(-50);
+    let higherHighs = 0;
+    let higherLows = 0;
+    let lowerHighs = 0;
+    let lowerLows = 0;
+
+    for (let i = 2; i < recentCandles.length; i++) {
+      const prev2 = recentCandles[i - 2];
+      const prev1 = recentCandles[i - 1];
+      const current = recentCandles[i];
+
+      if (current.high > prev1.high && prev1.high > prev2.high) {
+        higherHighs++;
+      }
+      if (current.low > prev1.low && prev1.low > prev2.low) {
+        higherLows++;
+      }
+      if (current.high < prev1.high && prev1.high < prev2.high) {
+        lowerHighs++;
+      }
+      if (current.low < prev1.low && prev1.low < prev2.low) {
+        lowerLows++;
+      }
+    }
+
+    const totalMoves = higherHighs + higherLows + lowerHighs + lowerLows;
+    const bullishScore = ((higherHighs + higherLows) / Math.max(totalMoves, 1)) * 100;
+    const bearishScore = ((lowerHighs + lowerLows) / Math.max(totalMoves, 1)) * 100;
+
+    let type: 'uptrend' | 'downtrend' | 'sideways' = 'sideways';
+    let strength = 0;
+
+    if (bullishScore > 60) {
+      type = 'uptrend';
+      strength = bullishScore;
+    } else if (bearishScore > 60) {
+      type = 'downtrend';
+      strength = bearishScore;
+    } else {
+      strength = 50 - Math.abs(bullishScore - bearishScore);
+    }
+
+    const rating = Math.ceil(strength / 20);
+
+    return { type, strength, rating };
+  }
+
+  /**
+   * 识别支撑阻力位
+   */
+  findSupportResistance(): SupportResistance[] {
+    const levels: SupportResistance[] = [];
+    const priceLevels = new Map<number, number>();
+
+    // 找出所有重要的高低点
+    for (let i = 2; i < this.candles.length - 2; i++) {
+      const prev2 = this.candles[i - 2];
+      const prev1 = this.candles[i - 1];
+      const current = this.candles[i];
+      const next1 = this.candles[i + 1];
+      const next2 = this.candles[i + 2];
+
+      // 局部高点
+      if (
+        current.high > prev1.high &&
+        current.high > prev2.high &&
+        current.high > next1.high &&
+        current.high > next2.high
+      ) {
+        const roundedPrice = Math.round(current.high * 100) / 100;
+        priceLevels.set(roundedPrice, (priceLevels.get(roundedPrice) || 0) + 1);
+      }
+
+      // 局部低点
+      if (
+        current.low < prev1.low &&
+        current.low < prev2.low &&
+        current.low < next1.low &&
+        current.low < next2.low
+      ) {
+        const roundedPrice = Math.round(current.low * 100) / 100;
+        priceLevels.set(roundedPrice, (priceLevels.get(roundedPrice) || 0) + 1);
+      }
+    }
+
+    // 转换为支撑阻力位
+    const currentPrice = this.candles[this.candles.length - 1].close;
+
+    priceLevels.forEach((touches, price) => {
+      const level: SupportResistance = {
+        price,
+        type: price > currentPrice ? 'resistance' : 'support',
+        strength: Math.min(touches, 5),
+        touches,
+      };
+      levels.push(level);
+    });
+
+    // 按价格排序并过滤
+    return levels
+      .sort((a, b) => b.price - a.price)
+      .filter((level, _index, self) => {
+        // 合并相近的价位
+        const nearby = self.findIndex(
+          (l) => Math.abs(l.price - level.price) / level.price < 0.02 && l !== level
+        );
+        return nearby === -1;
+      })
+      .slice(0, 10);
+  }
+
+  /**
+   * 识别K线形态
+   */
+  identifyPatterns(): PatternResult[] {
+    const patterns: PatternResult[] = [];
+
+    if (this.candles.length < 5) return patterns;
+
+    const len = this.candles.length;
+    const last = this.candles[len - 1];
+    const prev = this.candles[len - 2];
+    const prev2 = this.candles[len - 3];
+
+    // ====== 单根K线形态 ======
+    const bodySize = Math.abs(last.close - last.open);
+    const upperWick = last.high - Math.max(last.open, last.close);
+    const lowerWick = Math.min(last.open, last.close) - last.low;
+    const totalRange = last.high - last.low;
+    const isBullish = last.close > last.open;
+
+    if (totalRange > 0) {
+      // Pin Bar (锤子线/流星线)
+      // 看涨 Pin Bar (锤子线) - 出现在下跌趋势中
+      if (lowerWick >= totalRange * 0.6 && bodySize <= totalRange * 0.3 && !isBullish) {
+        patterns.push({
+          type: 'pin_bar_bullish',
+          name: '锤子线 (看涨)',
+          confidence: this.calculatePinBarConfidence(last, 'bullish'),
+          direction: 'bullish',
+          location: this.createPatternLocation(len - 1, len - 1, [
+            { time: last.time, price: last.low, type: 'valley' },
+            { time: last.time, price: last.high, type: 'peak' },
+          ]),
+        });
+      }
+
+      // 看跌 Pin Bar (流星线) - 出现在上涨趋势中
+      if (upperWick >= totalRange * 0.6 && bodySize <= totalRange * 0.3 && isBullish) {
+        patterns.push({
+          type: 'pin_bar_bearish',
+          name: '流星线 (看跌)',
+          confidence: this.calculatePinBarConfidence(last, 'bearish'),
+          direction: 'bearish',
+          location: this.createPatternLocation(len - 1, len - 1, [
+            { time: last.time, price: last.high, type: 'peak' },
+            { time: last.time, price: last.low, type: 'valley' },
+          ]),
+        });
+      }
+
+      // 十字星
+      if (bodySize <= totalRange * 0.1 && totalRange > 0) {
+        const dojiConfidence = totalRange > bodySize * 10 ? 75 : 65;
+        patterns.push({
+          type: 'doji',
+          name: '十字星',
+          confidence: dojiConfidence,
+          direction: 'neutral',
+          location: this.createPatternLocation(len - 1, len - 1, [
+            { time: last.time, price: (last.open + last.close) / 2, type: 'entry' },
+          ]),
+        });
+      }
+    }
+
+    // ====== 双根K线形态 ======
+    const prevBodySize = Math.abs(prev.close - prev.open);
+    const prevIsBullish = prev.close > prev.open;
+
+    // 吞没形态
+    if (
+      isBullish && // 当前是阳线
+      !prevIsBullish && // 前一根是阴线
+      bodySize > prevBodySize * 1.5 &&
+      last.close > prev.open &&
+      last.open < prev.close
+    ) {
+      patterns.push({
+        type: 'engulfing_bullish',
+        name: '看涨吞没',
+        confidence: this.calculateEngulfingConfidence(last, prev, 'bullish'),
+        direction: 'bullish',
+        location: this.createPatternLocation(len - 2, len - 1, [
+          { time: prev.time, price: prev.close, type: 'entry' },
+          { time: last.time, price: last.close, type: 'exit' },
+        ]),
+      });
+    }
+
+    if (
+      !isBullish && // 当前是阴线
+      prevIsBullish && // 前一根是阳线
+      bodySize > prevBodySize * 1.5 &&
+      last.close < prev.open &&
+      last.open > prev.close
+    ) {
+      patterns.push({
+        type: 'engulfing_bearish',
+        name: '看跌吞没',
+        confidence: this.calculateEngulfingConfidence(last, prev, 'bearish'),
+        direction: 'bearish',
+        location: this.createPatternLocation(len - 2, len - 1, [
+          { time: prev.time, price: prev.close, type: 'entry' },
+          { time: last.time, price: last.close, type: 'exit' },
+        ]),
+      });
+    }
+
+    // 孕线形态
+    if (
+      last.high < prev.high &&
+      last.low > prev.low &&
+      bodySize < prevBodySize * 0.5
+    ) {
+      patterns.push({
+        type: 'inside_bar',
+        name: '孕线形态',
+        confidence: 65,
+        direction: 'neutral',
+        location: this.createPatternLocation(len - 2, len - 1, [
+          { time: prev.time, price: prev.high, type: 'peak' },
+          { time: prev.time, price: prev.low, type: 'valley' },
+          { time: last.time, price: last.high, type: 'peak' },
+          { time: last.time, price: last.low, type: 'valley' },
+        ]),
+      });
+    }
+
+    // ====== 三根K线形态 ======
+    if (this.candles.length >= 3) {
+      // 早晨之星 (Morning Star)
+      if (this.isMorningStar(prev2, prev, last)) {
+        patterns.push({
+          type: 'morning_star',
+          name: '早晨之星',
+          confidence: 85,
+          direction: 'bullish',
+          location: this.createPatternLocation(len - 3, len - 1, [
+            { time: prev2.time, price: prev2.close, type: 'entry' },
+            { time: prev.time, price: (prev.open + prev.close) / 2, type: 'neckline' },
+            { time: last.time, price: last.close, type: 'exit' },
+          ]),
+        });
+      }
+
+      // 黄昏之星 (Evening Star)
+      if (this.isEveningStar(prev2, prev, last)) {
+        patterns.push({
+          type: 'evening_star',
+          name: '黄昏之星',
+          confidence: 85,
+          direction: 'bearish',
+          location: this.createPatternLocation(len - 3, len - 1, [
+            { time: prev2.time, price: prev2.close, type: 'entry' },
+            { time: prev.time, price: (prev.open + prev.close) / 2, type: 'neckline' },
+            { time: last.time, price: last.close, type: 'exit' },
+          ]),
+        });
+      }
+    }
+
+    // ====== 多根K线组合形态 (需要至少5根) ======
+    if (this.candles.length >= 5) {
+      // 三白兵 (Three White Soldiers)
+      const threeWhiteSoldiers = this.identifyThreeWhiteSoldiers();
+      if (threeWhiteSoldiers) {
+        patterns.push(threeWhiteSoldiers);
+      }
+
+      // 三只乌鸦 (Three Black Crows)
+      const threeBlackCrows = this.identifyThreeBlackCrows();
+      if (threeBlackCrows) {
+        patterns.push(threeBlackCrows);
+      }
+    }
+
+    // ====== 图表形态识别 (需要更多K线) ======
+    if (this.candles.length >= 20) {
+      const chartPatterns = this.identifyChartPatterns();
+      patterns.push(...chartPatterns);
+    }
+
+    return patterns.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * 创建形态位置信息
+   */
+  private createPatternLocation(
+    startIndex: number,
+    endIndex: number,
+    points: PatternPoint[]
+  ): PatternLocation {
+    const startCandle = this.candles[startIndex];
+    const endCandle = this.candles[endIndex];
+
+    return {
+      startIndex,
+      endIndex,
+      startTime: startCandle.time,
+      endTime: endCandle.time,
+      points,
+    };
+  }
+
+  /**
+   * 计算Pin Bar置信度
+   */
+  private calculatePinBarConfidence(candle: Candle, type: 'bullish' | 'bearish'): number {
+    const bodySize = Math.abs(candle.close - candle.open);
+    const upperWick = candle.high - Math.max(candle.open, candle.close);
+    const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+    const totalRange = candle.high - candle.low;
+
+    if (totalRange === 0) return 50;
+
+    const bodyRatio = bodySize / totalRange;
+    const wickRatio = type === 'bullish' ? lowerWick / totalRange : upperWick / totalRange;
+
+    let confidence = 70;
+    confidence += (wickRatio - 0.6) * 50;
+    confidence -= bodyRatio * 30;
+
+    return Math.min(Math.max(Math.round(confidence), 50), 95);
+  }
+
+  /**
+   * 计算吞没形态置信度
+   */
+  private calculateEngulfingConfidence(current: Candle, prev: Candle, type: 'bullish' | 'bearish'): number {
+    const currentBody = Math.abs(current.close - current.open);
+    const prevBody = Math.abs(prev.close - prev.open);
+
+    if (prevBody === 0) return 75;
+
+    const engulfingRatio = currentBody / prevBody;
+    let confidence = 75;
+    confidence += (engulfingRatio - 1.5) * 20;
+
+    if (type === 'bullish') {
+      if (current.low < prev.low) confidence += 5;
+      if (current.high > prev.high) confidence += 5;
+    } else {
+      if (current.high > prev.high) confidence += 5;
+      if (current.low < prev.low) confidence += 5;
+    }
+
+    return Math.min(Math.max(Math.round(confidence), 60), 95);
+  }
+
+  /**
+   * 识别早晨之星
+   */
+  private isMorningStar(first: Candle, second: Candle, third: Candle): boolean {
+    const firstBody = first.open - first.close;
+    const firstRange = first.high - first.low;
+    if (firstBody <= firstRange * 0.3) return false;
+
+    const secondBody = Math.abs(second.close - second.open);
+    const secondRange = second.high - second.low;
+    if (secondBody > secondRange * 0.5) return false;
+
+    const thirdBody = third.close - third.open;
+    if (thirdBody <= third.high - third.low * 0.3) return false;
+
+    const firstMid = (first.open + first.close) / 2;
+    return third.close > firstMid;
+  }
+
+  /**
+   * 识别黄昏之星
+   */
+  private isEveningStar(first: Candle, second: Candle, third: Candle): boolean {
+    const firstBody = first.close - first.open;
+    const firstRange = first.high - first.low;
+    if (firstBody <= firstRange * 0.3) return false;
+
+    const secondBody = Math.abs(second.close - second.open);
+    const secondRange = second.high - second.low;
+    if (secondBody > secondRange * 0.5) return false;
+
+    const thirdBody = third.open - third.close;
+    if (thirdBody <= third.high - third.low * 0.3) return false;
+
+    const firstMid = (first.open + first.close) / 2;
+    return third.close < firstMid;
+  }
+
+  /**
+   * 识别三白兵
+   */
+  private identifyThreeWhiteSoldiers(): PatternResult | null {
+    const len = this.candles.length;
+    const c1 = this.candles[len - 1];
+    const c2 = this.candles[len - 2];
+    const c3 = this.candles[len - 3];
+
+    if (c1.close <= c1.open || c2.close <= c2.open || c3.close <= c3.open) {
+      return null;
+    }
+
+    if (!(c3.close < c2.close && c2.close < c1.close)) {
+      return null;
+    }
+
+    const withinPrevBody = (current: Candle, prev: Candle) => {
+      return current.open > prev.open && current.open < prev.close;
+    };
+
+    if (!withinPrevBody(c2, c3) || !withinPrevBody(c1, c2)) {
+      return null;
+    }
+
+    const bodies = [c1, c2, c3].map(c => c.close - c.open);
+    const avgBody = bodies.reduce((a, b) => a + b, 0) / 3;
+    const consistency = 1 - (Math.max(...bodies) - Math.min(...bodies)) / avgBody;
+
+    return {
+      type: 'three_white_soldiers',
+      name: '三白兵',
+      confidence: Math.round(70 + consistency * 20),
+      direction: 'bullish',
+      location: this.createPatternLocation(len - 3, len - 1, [
+        { time: c3.time, price: c3.open, type: 'entry' },
+        { time: c2.time, price: c2.close, type: 'peak' },
+        { time: c1.time, price: c1.close, type: 'exit' },
+      ]),
+    };
+  }
+
+  /**
+   * 识别三只乌鸦
+   */
+  private identifyThreeBlackCrows(): PatternResult | null {
+    const len = this.candles.length;
+    const c1 = this.candles[len - 1];
+    const c2 = this.candles[len - 2];
+    const c3 = this.candles[len - 3];
+
+    if (c1.close >= c1.open || c2.close >= c2.open || c3.close >= c3.open) {
+      return null;
+    }
+
+    if (!(c3.close > c2.close && c2.close > c1.close)) {
+      return null;
+    }
+
+    const withinPrevBody = (current: Candle, prev: Candle) => {
+      return current.open < prev.open && current.open > prev.close;
+    };
+
+    if (!withinPrevBody(c2, c3) || !withinPrevBody(c1, c2)) {
+      return null;
+    }
+
+    const bodies = [c1, c2, c3].map(c => c.open - c.close);
+    const avgBody = bodies.reduce((a, b) => a + b, 0) / 3;
+    const consistency = 1 - (Math.max(...bodies) - Math.min(...bodies)) / avgBody;
+
+    return {
+      type: 'three_black_crows',
+      name: '三只乌鸦',
+      confidence: Math.round(70 + consistency * 20),
+      direction: 'bearish',
+      location: this.createPatternLocation(len - 3, len - 1, [
+        { time: c3.time, price: c3.open, type: 'entry' },
+        { time: c2.time, price: c2.close, type: 'valley' },
+        { time: c1.time, price: c1.close, type: 'exit' },
+      }),
+    };
+  }
+
+  /**
+   * 识别图表形态 (双顶、双底、三角形等)
+   */
+  private identifyChartPatterns(): PatternResult[] {
+    const patterns: PatternResult[] = [];
+    const recentCandles = this.candles.slice(-50);
+
+    const swingHighs = this.findSwingHighs(recentCandles);
+    const swingLows = this.findSwingLows(recentCandles);
+
+    // 双顶/双底
+    const doublePattern = this.identifyDoublePattern(swingHighs, swingLows);
+    if (doublePattern) patterns.push(doublePattern);
+
+    // 头肩顶/底
+    const headShoulders = this.identifyHeadShoulders(swingHighs, swingLows);
+    if (headShoulders) patterns.push(headShoulders);
+
+    // 三角形
+    const triangle = this.identifyTriangle(swingHighs, swingLows);
+    if (triangle) patterns.push(triangle);
+
+    // 旗形/通道
+    const flag = this.identifyFlag(recentCandles);
+    if (flag) patterns.push(flag);
+
+    // 三推楔形
+    const threePushWedge = this.identifyThreePushWedge(swingHighs, swingLows);
+    if (threePushWedge) patterns.push(threePushWedge);
+
+    // 通道
+    const channel = this.identifyChannel(swingHighs, swingLows);
+    if (channel) patterns.push(channel);
+
+    return patterns;
+  }
+
+  /**
+   * 寻找摆动高点
+   */
+  private findSwingHighs(candles: Candle[], lookback: number = 5): Array<{ index: number; price: number; time: string | number }> {
+    const highs: Array<{ index: number; price: number; time: string | number }> = [];
+
+    for (let i = lookback; i < candles.length - lookback; i++) {
+      const current = candles[i].high;
+      let isSwingHigh = true;
+
+      for (let j = 1; j <= lookback; j++) {
+        if (candles[i - j].high >= current || candles[i + j].high >= current) {
+          isSwingHigh = false;
+          break;
+        }
+      }
+
+      if (isSwingHigh) {
+        highs.push({ index: i, price: current, time: candles[i].time });
+      }
+    }
+
+    return highs;
+  }
+
+  /**
+   * 寻找摆动低点
+   */
+  private findSwingLows(candles: Candle[], lookback: number = 5): Array<{ index: number; price: number; time: string | number }> {
+    const lows: Array<{ index: number; price: number; time: string | number }> = [];
+
+    for (let i = lookback; i < candles.length - lookback; i++) {
+      const current = candles[i].low;
+      let isSwingLow = true;
+
+      for (let j = 1; j <= lookback; j++) {
+        if (candles[i - j].low <= current || candles[i + j].low <= current) {
+          isSwingLow = false;
+          break;
+        }
+      }
+
+      if (isSwingLow) {
+        lows.push({ index: i, price: current, time: candles[i].time });
+      }
+    }
+
+    return lows;
+  }
+
+  /**
+   * 识别双顶/双底
+   */
+  private identifyDoublePattern(
+    swingHighs: Array<{ index: number; price: number; time: string | number }>,
+    swingLows: Array<{ index: number; price: number; time: string | number }>
+  ): PatternResult | null {
+    const len = this.candles.length;
+
+    // 双顶
+    if (swingHighs.length >= 2) {
+      for (let i = 0; i < swingHighs.length - 1; i++) {
+        for (let j = i + 1; j < swingHighs.length; j++) {
+          const high1 = swingHighs[i];
+          const high2 = swingHighs[j];
+          const priceDiff = Math.abs(high1.price - high2.price) / high1.price;
+
+          if (priceDiff < 0.03) {
+            const hasPullback = this.checkPullbackBetween(high1.index, high2.index, 'high');
+
+            if (hasPullback) {
+              // 计算颈线位置
+              const betweenCandles = this.candles.slice(high1.index, high2.index + 1);
+              const necklinePrice = Math.min(...betweenCandles.map(c => c.low));
+
+              return {
+                type: 'double_top',
+                name: '双顶形态',
+                confidence: Math.round(75 - priceDiff * 500),
+                direction: 'bearish',
+                location: this.createPatternLocation(len - 50 + high1.index, len - 50 + high2.index, [
+                  { time: high1.time, price: high1.price, type: 'peak' },
+                  { time: high2.time, price: high2.price, type: 'peak' },
+                  { time: high1.time, price: necklinePrice, type: 'neckline' },
+                ]),
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // 双底
+    if (swingLows.length >= 2) {
+      for (let i = 0; i < swingLows.length - 1; i++) {
+        for (let j = i + 1; j < swingLows.length; j++) {
+          const low1 = swingLows[i];
+          const low2 = swingLows[j];
+          const priceDiff = Math.abs(low1.price - low2.price) / low1.price;
+
+          if (priceDiff < 0.03) {
+            const hasBounce = this.checkPullbackBetween(low1.index, low2.index, 'low');
+
+            if (hasBounce) {
+              const betweenCandles = this.candles.slice(low1.index, low2.index + 1);
+              const necklinePrice = Math.max(...betweenCandles.map(c => c.high));
+
+              return {
+                type: 'double_bottom',
+                name: '双底形态',
+                confidence: Math.round(75 - priceDiff * 500),
+                direction: 'bullish',
+                location: this.createPatternLocation(len - 50 + low1.index, len - 50 + low2.index, [
+                  { time: low1.time, price: low1.price, type: 'valley' },
+                  { time: low2.time, price: low2.price, type: 'valley' },
+                  { time: low1.time, price: necklinePrice, type: 'neckline' },
+                ]),
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 检查两个极值点之间是否有回调/反弹
+   */
+  private checkPullbackBetween(index1: number, index2: number, type: 'high' | 'low'): boolean {
+    const start = Math.min(index1, index2);
+    const end = Math.max(index1, index2);
+
+    if (end - start < 3) return false;
+
+    const candles = this.candles.slice(start, end + 1);
+
+    if (type === 'high') {
+      const minBetween = Math.min(...candles.map(c => c.low));
+      const firstHigh = candles[0].high;
+      const pullbackRatio = (firstHigh - minBetween) / firstHigh;
+      return pullbackRatio > 0.02;
+    } else {
+      const maxBetween = Math.max(...candles.map(c => c.high));
+      const firstLow = candles[0].low;
+      const bounceRatio = (maxBetween - firstLow) / firstLow;
+      return bounceRatio > 0.02;
+    }
+  }
+
+  /**
+   * 识别头肩顶/底
+   */
+  private identifyHeadShoulders(
+    swingHighs: Array<{ index: number; price: number; time: string | number }>,
+    swingLows: Array<{ index: number; price: number; time: string | number }>
+  ): PatternResult | null {
+    const len = this.candles.length;
+
+    if (swingHighs.length < 3 && swingLows.length < 3) return null;
+
+    // 头肩顶
+    if (swingHighs.length >= 3) {
+      for (let i = 0; i <= swingHighs.length - 3; i++) {
+        const left = swingHighs[i];
+        const head = swingHighs[i + 1];
+        const right = swingHighs[i + 2];
+
+        if (head.price > left.price && head.price > right.price) {
+          const shoulderDiff = Math.abs(left.price - right.price) / left.price;
+
+          if (shoulderDiff < 0.05) {
+            return {
+              type: 'head_shoulders_top',
+              name: '头肩顶',
+              confidence: Math.round(80 - shoulderDiff * 400),
+              direction: 'bearish',
+              location: this.createPatternLocation(len - 50 + left.index, len - 50 + right.index, [
+                { time: left.time, price: left.price, type: 'peak', label: '左肩' },
+                { time: head.time, price: head.price, type: 'peak', label: '头部' },
+                { time: right.time, price: right.price, type: 'peak', label: '右肩' },
+              ]),
+            };
+          }
+        }
+      }
+    }
+
+    // 头肩底
+    if (swingLows.length >= 3) {
+      for (let i = 0; i <= swingLows.length - 3; i++) {
+        const left = swingLows[i];
+        const head = swingLows[i + 1];
+        const right = swingLows[i + 2];
+
+        if (head.price < left.price && head.price < right.price) {
+          const shoulderDiff = Math.abs(left.price - right.price) / left.price;
+
+          if (shoulderDiff < 0.05) {
+            return {
+              type: 'head_shoulders_bottom',
+              name: '头肩底',
+              confidence: Math.round(80 - shoulderDiff * 400),
+              direction: 'bullish',
+              location: this.createPatternLocation(len - 50 + left.index, len - 50 + right.index, [
+                { time: left.time, price: left.price, type: 'valley', label: '左肩' },
+                { time: head.time, price: head.price, type: 'valley', label: '头部' },
+                { time: right.time, price: right.price, type: 'valley', label: '右肩' },
+              ]),
+            };
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别三角形形态
+   */
+  private identifyTriangle(
+    swingHighs: Array<{ index: number; price: number; time: string | number }>,
+    swingLows: Array<{ index: number; price: number; time: string | number }>
+  ): PatternResult | null {
+    if (swingHighs.length < 3 || swingLows.length < 3) return null;
+
+    const recentHighs = swingHighs.slice(-4);
+    const recentLows = swingLows.slice(-4);
+
+    const highSlope = this.calculateSlope(recentHighs);
+    const lowSlope = this.calculateSlope(recentLows);
+
+    const len = this.candles.length;
+    const points: PatternPoint[] = [
+      ...recentHighs.map(h => ({ time: h.time, price: h.price, type: 'peak' as PatternPoint['type'] })),
+      ...recentLows.map(l => ({ time: l.time, price: l.price, type: 'valley' as PatternPoint['type'] })),
+    ];
+
+    // 上升三角形
+    if (Math.abs(highSlope) < 0.001 && lowSlope > 0.002) {
+      return {
+        type: 'ascending_triangle',
+        name: '上升三角形',
+        confidence: 75,
+        direction: 'bullish',
+        location: this.createPatternLocation(len - 20, len - 1, points),
+      };
+    }
+
+    // 下降三角形
+    if (highSlope < -0.002 && Math.abs(lowSlope) < 0.001) {
+      return {
+        type: 'descending_triangle',
+        name: '下降三角形',
+        confidence: 75,
+        direction: 'bearish',
+        location: this.createPatternLocation(len - 20, len - 1, points),
+      };
+    }
+
+    // 对称三角形
+    if (highSlope < -0.001 && lowSlope > 0.001) {
+      return {
+        type: 'symmetrical_triangle',
+        name: '对称三角形',
+        confidence: 70,
+        direction: 'neutral',
+        location: this.createPatternLocation(len - 20, len - 1, points),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别三推楔形
+   */
+  private identifyThreePushWedge(
+    swingHighs: Array<{ index: number; price: number; time: string | number }>,
+    swingLows: Array<{ index: number; price: number; time: string | number }>
+  ): PatternResult | null {
+    const len = this.candles.length;
+
+    // 看涨三推楔形（三个逐渐降低的高点）
+    if (swingHighs.length >= 3) {
+      const recent = swingHighs.slice(-3);
+      if (recent[0].price > recent[1].price && recent[1].price > recent[2].price) {
+        // 检查是否收敛
+        const firstDiff = recent[0].price - recent[1].price;
+        const secondDiff = recent[1].price - recent[2].price;
+
+        if (secondDiff < firstDiff) {
+          return {
+            type: 'three_push_wedge',
+            name: '看跌三推楔形',
+            confidence: 75,
+            direction: 'bearish',
+            location: this.createPatternLocation(len - 50 + recent[0].index, len - 50 + recent[2].index, [
+              { time: recent[0].time, price: recent[0].price, type: 'peak', label: '第一推' },
+              { time: recent[1].time, price: recent[1].price, type: 'peak', label: '第二推' },
+              { time: recent[2].time, price: recent[2].price, type: 'peak', label: '第三推' },
+            ]),
+          };
+        }
+      }
+    }
+
+    // 看跌三推楔形（三个逐渐抬高的低点）
+    if (swingLows.length >= 3) {
+      const recent = swingLows.slice(-3);
+      if (recent[0].price < recent[1].price && recent[1].price < recent[2].price) {
+        const firstDiff = recent[1].price - recent[0].price;
+        const secondDiff = recent[2].price - recent[1].price;
+
+        if (secondDiff < firstDiff) {
+          return {
+            type: 'three_push_wedge',
+            name: '看涨三推楔形',
+            confidence: 75,
+            direction: 'bullish',
+            location: this.createPatternLocation(len - 50 + recent[0].index, len - 50 + recent[2].index, [
+              { time: recent[0].time, price: recent[0].price, type: 'valley', label: '第一推' },
+              { time: recent[1].time, price: recent[1].price, type: 'valley', label: '第二推' },
+              { time: recent[2].time, price: recent[2].price, type: 'valley', label: '第三推' },
+            ]),
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别通道
+   */
+  private identifyChannel(
+    swingHighs: Array<{ index: number; price: number; time: string | number }>,
+    swingLows: Array<{ index: number; price: number; time: string | number }>
+  ): PatternResult | null {
+    if (swingHighs.length < 3 || swingLows.length < 3) return null;
+
+    const len = this.candles.length;
+    const recentHighs = swingHighs.slice(-4);
+    const recentLows = swingLows.slice(-4);
+
+    const highSlope = this.calculateSlope(recentHighs);
+    const lowSlope = this.calculateSlope(recentLows);
+
+    // 上升通道：两条平行上升的趋势线
+    if (highSlope > 0.001 && lowSlope > 0.001) {
+      const slopeDiff = Math.abs(highSlope - lowSlope);
+      if (slopeDiff < 0.002) {
+        return {
+          type: 'channel_up',
+          name: '上升通道',
+          confidence: 70,
+          direction: 'bullish',
+          location: this.createPatternLocation(len - 20, len - 1, [
+            ...recentHighs.map(h => ({ time: h.time, price: h.price, type: 'peak' as PatternPoint['type'], label: 'upper' })),
+            ...recentLows.map(l => ({ time: l.time, price: l.price, type: 'valley' as PatternPoint['type'], label: 'lower' })),
+          ]),
+        };
+      }
+    }
+
+    // 下降通道
+    if (highSlope < -0.001 && lowSlope < -0.001) {
+      const slopeDiff = Math.abs(highSlope - lowSlope);
+      if (slopeDiff < 0.002) {
+        return {
+          type: 'channel_down',
+          name: '下降通道',
+          confidence: 70,
+          direction: 'bearish',
+          location: this.createPatternLocation(len - 20, len - 1, [
+            ...recentHighs.map(h => ({ time: h.time, price: h.price, type: 'peak' as PatternPoint['type'], label: 'upper' })),
+            ...recentLows.map(l => ({ time: l.time, price: l.price, type: 'valley' as PatternPoint['type'], label: 'lower' })),
+          ]),
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 计算趋势线斜率
+   */
+  private calculateSlope(points: Array<{ index: number; price: number }>): number {
+    if (points.length < 2) return 0;
+
+    const n = points.length;
+    const sumX = points.reduce((sum, p) => sum + p.index, 0);
+    const sumY = points.reduce((sum, p) => sum + p.price, 0);
+    const sumXY = points.reduce((sum, p) => sum + p.index * p.price, 0);
+    const sumX2 = points.reduce((sum, p) => sum + p.index * p.index, 0);
+
+    const denominator = n * sumX2 - sumX * sumX;
+    if (denominator === 0) return 0;
+
+    return (n * sumXY - sumX * sumY) / denominator;
+  }
+
+  /**
+   * 识别旗形/通道
+   */
+  private identifyFlag(candles: Candle[]): PatternResult | null {
+    if (candles.length < 20) return null;
+
+    const len = candles.length;
+    const firstHalf = candles.slice(0, Math.floor(len / 2));
+    const secondHalf = candles.slice(Math.floor(len / 2));
+
+    const firstTrend = this.calculateTrendStrength(firstHalf);
+    const secondTrend = this.calculateTrendStrength(secondHalf);
+
+    if (Math.abs(firstTrend) > 0.1 && Math.abs(secondTrend) < 0.03) {
+      const direction = firstTrend > 0 ? 'bullish' : 'bearish';
+      const name = firstTrend > 0 ? '看涨旗形' : '看跌旗形';
+
+      return {
+        type: 'flag',
+        name,
+        confidence: 70,
+        direction,
+        location: this.createPatternLocation(len - 20, len - 1, [
+          { time: candles[0].time, price: candles[0].close, type: 'entry' },
+          { time: candles[candles.length - 1].time, price: candles[candles.length - 1].close, type: 'exit' },
+        ]),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 计算趋势强度
+   */
+  private calculateTrendStrength(candles: Candle[]): number {
+    if (candles.length < 2) return 0;
+
+    const startPrice = candles[0].close;
+    const endPrice = candles[candles.length - 1].close;
+
+    return (endPrice - startPrice) / startPrice;
+  }
+
+  /**
+   * 生成交易信号
+   */
+  generateSignals(): Signal[] {
+    const signals: Signal[] = [];
+    const trend = this.analyzeTrend();
+    const patterns = this.identifyPatterns();
+    const supportResistance = this.findSupportResistance();
+    const lastCandle = this.candles[this.candles.length - 1];
+
+    if (trend.type === 'uptrend' && trend.strength > 60) {
+      signals.push({
+        type: 'buy',
+        reason: `上升趋势强劲，强度 ${trend.strength.toFixed(0)}%`,
+        strength: Math.min(trend.rating, 4),
+      });
+    } else if (trend.type === 'downtrend' && trend.strength > 60) {
+      signals.push({
+        type: 'sell',
+        reason: `下降趋势明显，强度 ${trend.strength.toFixed(0)}%`,
+        strength: Math.min(trend.rating, 4),
+      });
+    }
+
+    patterns.forEach((pattern) => {
+      if (pattern.direction === 'bullish' && pattern.confidence > 70) {
+        signals.push({
+          type: 'buy',
+          reason: `检测到${pattern.name}形态`,
+          strength: Math.ceil(pattern.confidence / 25),
+        });
+      } else if (pattern.direction === 'bearish' && pattern.confidence > 70) {
+        signals.push({
+          type: 'sell',
+          reason: `检测到${pattern.name}形态`,
+          strength: Math.ceil(pattern.confidence / 25),
+        });
+      }
+    });
+
+    supportResistance.forEach((level) => {
+      const distance = Math.abs(lastCandle.close - level.price) / lastCandle.close;
+
+      if (distance < 0.02) {
+        if (level.type === 'support' && trend.type !== 'downtrend') {
+          signals.push({
+            type: 'buy',
+            reason: `接近支撑位 ¥${level.price.toFixed(2)}`,
+            strength: level.strength,
+            price: level.price,
+          });
+        } else if (level.type === 'resistance' && trend.type !== 'uptrend') {
+          signals.push({
+            type: 'sell',
+            reason: `接近阻力位 ¥${level.price.toFixed(2)}`,
+            strength: level.strength,
+            price: level.price,
+          });
+        }
+      }
+    });
+
+    return signals;
+  }
+
+  /**
+   * 生成交易建议
+   */
+  generateRecommendation(): TradeRecommendation {
+    const trend = this.analyzeTrend();
+    const patterns = this.identifyPatterns();
+    const supportResistance = this.findSupportResistance();
+    const lastCandle = this.candles[this.candles.length - 1];
+    const currentPrice = lastCandle.close;
+
+    const reasons: string[] = [];
+    const warnings: string[] = [];
+    let action: 'buy' | 'sell' | 'hold' | 'wait' = 'hold';
+
+    if (trend.type === 'uptrend') {
+      reasons.push(`${trend.type === 'uptrend' ? '上升' : '下降'}趋势保持完好`);
+    } else if (trend.type === 'downtrend') {
+      reasons.push('下降趋势中，建议谨慎');
+      warnings.push('当前处于下降趋势');
+    }
+
+    const bullishPatterns = patterns.filter((p) => p.direction === 'bullish');
+    const bearishPatterns = patterns.filter((p) => p.direction === 'bearish');
+
+    if (bullishPatterns.length > 0) {
+      reasons.push(`出现看涨形态: ${bullishPatterns.map((p) => p.name).join(', ')}`);
+    }
+    if (bearishPatterns.length > 0) {
+      warnings.push(`出现看跌形态: ${bearishPatterns.map((p) => p.name).join(', ')}`);
+    }
+
+    const nearestSupport = supportResistance
+      .filter((s) => s.type === 'support' && s.price < currentPrice)
+      .sort((a, b) => b.price - a.price)[0];
+
+    const nearestResistance = supportResistance
+      .filter((s) => s.type === 'resistance' && s.price > currentPrice)
+      .sort((a, b) => a.price - b.price)[0];
+
+    let entryPrice: { min: number; max: number } | undefined;
+    let stopLoss: number | undefined;
+    let targets: number[] = [];
+
+    const bullishScore = bullishPatterns.reduce((sum, p) => sum + p.confidence, 0);
+    const bearishScore = bearishPatterns.reduce((sum, p) => sum + p.confidence, 0);
+
+    if (trend.type === 'uptrend' && bullishScore > bearishScore) {
+      action = 'buy';
+      reasons.push('回调做多机会');
+
+      if (nearestSupport) {
+        entryPrice = {
+          min: nearestSupport.price * 1.01,
+          max: currentPrice,
+        };
+        stopLoss = nearestSupport.price * 0.98;
+        reasons.push(`支撑位在 ¥${nearestSupport.price.toFixed(2)}`);
+      } else {
+        entryPrice = {
+          min: currentPrice * 0.98,
+          max: currentPrice,
+        };
+        stopLoss = currentPrice * 0.95;
+      }
+
+      if (nearestResistance) {
+        targets = [nearestResistance.price, nearestResistance.price * 1.05];
+      } else {
+        targets = [currentPrice * 1.05, currentPrice * 1.10];
+      }
+    } else if (trend.type === 'downtrend' && bearishScore > bullishScore) {
+      action = 'sell';
+      reasons.push('顺势做空机会');
+
+      if (nearestResistance) {
+        entryPrice = {
+          min: currentPrice,
+          max: nearestResistance.price * 0.99,
+        };
+        stopLoss = nearestResistance.price * 1.02;
+        reasons.push(`阻力位在 ¥${nearestResistance.price.toFixed(2)}`);
+      } else {
+        entryPrice = {
+          min: currentPrice,
+          max: currentPrice * 1.02,
+        };
+        stopLoss = currentPrice * 1.05;
+      }
+
+      if (nearestSupport) {
+        targets = [nearestSupport.price, nearestSupport.price * 0.95];
+      } else {
+        targets = [currentPrice * 0.95, currentPrice * 0.90];
+      }
+    } else {
+      action = 'wait';
+      reasons.push('市场信号不明确，建议观望');
+    }
+
+    let riskRewardRatio: number | undefined;
+    if (entryPrice && stopLoss && targets.length > 0) {
+      const risk = Math.abs(entryPrice.max - stopLoss);
+      const reward = Math.abs(targets[0] - entryPrice.min);
+      if (risk > 0) {
+        riskRewardRatio = reward / risk;
+      }
+    }
+
+    return {
+      action,
+      entryPrice,
+      stopLoss,
+      targets,
+      riskRewardRatio,
+      reasons,
+      warnings,
+    };
+  }
+
+  /**
+   * 完整分析
+   */
+  analyze(): PriceActionAnalysis {
+    return {
+      trend: this.analyzeTrend(),
+      patterns: this.identifyPatterns(),
+      supportResistance: this.findSupportResistance(),
+      signals: this.generateSignals(),
+      recommendation: this.generateRecommendation(),
+    };
+  }
+}
+
+/**
+ * 格式化价格
+ */
+export function formatPrice(price: number): string {
+  if (price >= 1000) {
+    return `¥${price.toFixed(0)}`;
+  } else if (price >= 100) {
+    return `¥${price.toFixed(1)}`;
+  } else {
+    return `¥${price.toFixed(2)}`;
+  }
+}
+
+/**
+ * 格式化涨跌幅
+ */
+export function formatChange(change: number): string {
+  const sign = change >= 0 ? '+' : '';
+  return `${sign}${change.toFixed(2)}%`;
+}
+
+/**
+ * 生成星星评级
+ */
+export function generateStarRating(rating: number): { filled: number; empty: number } {
+  return {
+    filled: Math.min(Math.max(rating, 0), 5),
+    empty: Math.max(0, 5 - rating),
+  };
+}

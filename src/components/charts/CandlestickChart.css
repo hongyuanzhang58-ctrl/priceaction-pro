@@ -1,0 +1,90 @@
+/* TradingView 风格图表容器 */
+.candlestick-chart-wrapper {
+  display: flex;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.candlestick-chart-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* 防止 flex 子元素溢出 */
+}
+
+.chart-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.chart-no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* 形态高亮横幅 */
+.pattern-highlight-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-bottom: 1px solid #bfdbfe;
+  flex-shrink: 0;
+}
+
+.pattern-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+.pattern-direction {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pattern-direction.bullish {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pattern-direction.bearish {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.pattern-direction.neutral {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.pattern-confidence {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.clear-highlight-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-highlight-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}

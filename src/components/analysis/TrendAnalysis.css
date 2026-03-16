@@ -1,0 +1,107 @@
+/* 形态列表样式 */
+.pattern-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.pattern-item.clickable {
+  cursor: pointer;
+  background: #fafafa;
+}
+
+.pattern-item.clickable:hover,
+.pattern-item.hovered {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.pattern-item.highlighted {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3);
+}
+
+.pattern-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.view-icon {
+  font-size: 12px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.pattern-item.clickable:hover .view-icon,
+.pattern-item.hovered .view-icon {
+  opacity: 1;
+}
+
+/* 形态高亮动画 */
+@keyframes patternPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+}
+
+.pattern-item.highlighted {
+  animation: patternPulse 1.5s infinite;
+}
+
+/* 支撑阻力样式增强 */
+.sr-item {
+  transition: background 0.2s;
+}
+
+.sr-item:hover {
+  background: #f8fafc;
+}
+
+/* 信号项样式 */
+.signal-item {
+  transition: background 0.2s;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  margin-right: -8px;
+}
+
+.signal-item:hover {
+  background: #f8fafc;
+}
+
+/* 建议卡片样式 */
+.recommendation-card {
+  transition: all 0.2s;
+}
+
+.recommendation-card:hover {
+  transform: translateY(-1px);
+}
+
+/* 价格标签 */
+.price-tag {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .pattern-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .pattern-item {
+    padding: 8px 10px;
+  }
+}

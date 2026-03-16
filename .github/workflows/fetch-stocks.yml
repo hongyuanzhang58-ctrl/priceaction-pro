@@ -1,0 +1,103 @@
+name: Fetch Stock List
+
+on:
+  schedule:
+    # 每天北京时间 0:00 (UTC 16:00) 运行
+    - cron: '0 16 * * *'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  fetch-stocks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Fetch stock list
+      run: |
+        cat > fetch-stocks.js << 'EOF'
+        const fs = require('fs');
+        const https = require('https');
+
+        function fetchData(url) {
+          return new Promise((resolve, reject) => {
+            const req = https.get(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://quote.eastmoney.com/'
+              }
+            }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(data));
+            });
+            req.on('error', reject);
+            req.setTimeout(30000, () => {
+              req.destroy();
+              reject(new Error('Timeout'));
+            });
+          });
+        }
+
+        async function main() {
+          try {
+            // 获取所有 A 股
+            const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=6000&po=1&np=1&fltt=2&invt=2&fid=f12&fs=m:0+t:6,m:0+t:13,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:204&fields=f12,f14';
+
+            console.log('Fetching stock list...');
+            const response = await fetchData(url);
+            const data = JSON.parse(response);
+
+            if (!data.data || !data.data.diff) {
+              throw new Error('Invalid response');
+            }
+
+            // 格式化数据
+            const stocks = data.data.diff.map(item => ({
+              symbol: item.f12,
+              name: item.f14
+            })).filter(s => s.symbol && s.name);
+
+            // 按拼音首字母分组（可选，用于快速索引）
+            const stockMap = {};
+            stocks.forEach(stock => {
+              stockMap[stock.symbol] = stock.name;
+            });
+
+            // 生成 JSON 文件
+            const output = {
+              updateTime: new Date().toISOString(),
+              total: stocks.length,
+              stocks: stocks,
+              symbolMap: stockMap
+            };
+
+            fs.writeFileSync('public/stocks.json', JSON.stringify(output, null, 2));
+            console.log(`Saved ${stocks.length} stocks to public/stocks.json`);
+
+          } catch (error) {
+            console.error('Error:', error);
+            process.exit(1);
+          }
+        }
+
+        main();
+        EOF
+
+        node fetch-stocks.js
+
+    - name: Commit and push
+      run: |
+        git config user.name 'GitHub Actions'
+        git config user.email 'actions@github.com'
+        git add public/stocks.json
+        git diff --staged --quiet || git commit -m 'Update stock list [automated]'
+        git push

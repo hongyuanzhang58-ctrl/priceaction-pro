@@ -1,0 +1,9 @@
+# 股票API代理 - Wrangler配置
+name = "stock-api-proxy"
+main = "index.js"
+compatibility_date = "2024-03-13"
+
+# 可选：自定义域名
+# routes = [
+#   { pattern = "api.yourdomain.com", custom_domain = true }
+# ]

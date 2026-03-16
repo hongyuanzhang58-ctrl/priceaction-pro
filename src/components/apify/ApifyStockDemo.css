@@ -1,0 +1,339 @@
+/* ApifyStockDemo 组件样式 */
+
+.apify-demo {
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.apify-demo__header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.apify-demo__header h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #1a1a1a;
+}
+
+.apify-demo__desc {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.apify-demo__config {
+  margin-bottom: 20px;
+}
+
+.apify-demo__input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.apify-demo__input-group label {
+  font-weight: 500;
+  color: #333;
+  min-width: 80px;
+}
+
+.apify-demo__input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.apify-demo__input:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.apify-demo__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.apify-demo__tab {
+  padding: 8px 16px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+
+.apify-demo__tab:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.apify-demo__tab.active {
+  background: #1890ff;
+  color: #fff;
+  border-color: #1890ff;
+}
+
+.apify-demo__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.apify-demo__btn {
+  padding: 10px 20px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.apify-demo__btn:hover:not(:disabled) {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.apify-demo__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.apify-demo__btn--primary {
+  background: #1890ff;
+  color: #fff;
+  border-color: #1890ff;
+}
+
+.apify-demo__btn--primary:hover:not(:disabled) {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  color: #fff;
+}
+
+.apify-demo__error {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+}
+
+.apify-demo__help {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ffccc7;
+}
+
+.apify-demo__help p {
+  margin: 5px 0;
+  font-size: 13px;
+}
+
+.apify-demo__help ol {
+  margin: 5px 0;
+  padding-left: 20px;
+}
+
+.apify-demo__help li {
+  margin: 3px 0;
+  font-size: 13px;
+}
+
+.apify-demo__help code {
+  padding: 2px 6px;
+  background: #f5f5f5;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.apify-demo__result {
+  margin-bottom: 20px;
+}
+
+.apify-demo__result h3 {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  color: #1a1a1a;
+}
+
+.apify-demo__stock-card {
+  padding: 20px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+}
+
+.apify-demo__stock-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.apify-demo__symbol {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.apify-demo__name {
+  font-size: 16px;
+  color: #666;
+}
+
+.apify-demo__stock-price {
+  display: flex;
+  align-items: baseline;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.apify-demo__price {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.apify-demo__change {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.apify-demo__change.up {
+  color: #cf1322;
+}
+
+.apify-demo__change.down {
+  color: #389e0d;
+}
+
+.apify-demo__stock-info {
+  display: flex;
+  gap: 30px;
+}
+
+.apify-demo__info-item {
+  display: flex;
+  gap: 8px;
+}
+
+.apify-demo__info-item .label {
+  color: #666;
+}
+
+.apify-demo__info-item .value {
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.apify-demo__empty {
+  padding: 40px;
+  text-align: center;
+  color: #999;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.apify-demo__news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.apify-demo__news-item {
+  padding: 15px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  border-left: 3px solid #1890ff;
+}
+
+.apify-demo__news-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.apify-demo__news-meta {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.apify-demo__news-source {
+  color: #1890ff;
+}
+
+.apify-demo__news-time {
+  color: #999;
+}
+
+.apify-demo__news-sentiment {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.apify-demo__news-sentiment.positive {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.apify-demo__news-sentiment.negative {
+  background: #fff2f0;
+  color: #cf1322;
+}
+
+.apify-demo__news-sentiment.neutral {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.apify-demo__news-summary {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.apify-demo__footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.apify-demo__footer h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.apify-demo__footer ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.apify-demo__footer li {
+  margin: 5px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.apify-demo__footer a {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+.apify-demo__footer a:hover {
+  text-decoration: underline;
+}
