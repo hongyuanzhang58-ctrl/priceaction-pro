@@ -17,7 +17,7 @@ function App() {
   const [highlightedPattern, setHighlightedPattern] = useState<PatternResult | null>(null);
   const { timeFrame, setTimeFrame, setCurrentStock, setCandles } = useStockStore();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
-  const { searchResults, search } = useSearch();
+  const { searchResults, searchLoading, search } = useSearch();
 
   // 当前选中的股票
   const selectedSymbol = useStockStore((state) => state.currentStock?.symbol) || '600519';
@@ -128,6 +128,7 @@ function App() {
       onTabChange={setActiveTab}
       watchlistCount={watchlist.length}
       searchResults={searchResults}
+      searchLoading={searchLoading}
       onSearch={search}
       onSelectStock={handleSelectStock}
     >

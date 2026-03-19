@@ -82,21 +82,9 @@ export class LocalListDataSource {
     return results;
   }
 
-  async getStock(symbol: string): Promise<Stock | null> {
-    await this.loadStockList();
-
-    const name = this.symbolMap[symbol];
-    if (!name) return null;
-
-    return {
-      symbol,
-      name,
-      price: 0,
-      change: 0,
-      changePercent: 0,
-      volume: 0,
-      turnover: 0
-    };
+  // getStock 返回 null，让其他数据源获取真实价格
+  async getStock(_symbol: string): Promise<Stock | null> {
+    return null;
   }
 
   // 以下方法返回空，价格数据通过其他数据源获取

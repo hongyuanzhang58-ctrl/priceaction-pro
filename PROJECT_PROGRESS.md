@@ -20,11 +20,13 @@ npm run build && npx serve dist -l 3009
 
 ## 当前状态
 
-**版本**: V1.5
+**版本**: V1.6
 
-**最后更新**: 2026-03-12
+**最后更新**: 2026-03-19
 
-**状态**: ✅ 构建成功，已接入真实数据源（新浪/腾讯/东方财富）
+**状态**: ✅ 已部署到阿里云服务器，搜索功能已修复
+
+**访问地址**: http://47.102.185.224
 
 ---
 
@@ -194,6 +196,11 @@ priceaction-pro/
 18. **【V1.5 优化】请求队列** → 500ms间隔限流，避免被数据源封禁
 19. **【V1.5 修复】搜索功能** → 由于浏览器CORS限制，改用直接代码查询+本地名称匹配方案
 20. **【V1.5 新增】代理服务器** → 提供完整后端代理方案，支持Railway/Render/Cloudflare/自有服务器部署
+21. **【V1.6 新增】服务器部署** → 部署到阿里云轻量服务器，配置Nginx
+22. **【V1.6 修复】搜索价格显示0** → LocalListDataSource.getStock返回null，让其他数据源获取真实价格
+23. **【V1.6 修复】搜索结果不稳定** → 添加searchLoading状态、防抖处理、精确匹配过滤
+24. **【V1.6 修复】CSS样式缺失** → 添加bg-black等缺失样式，Header改用内联样式
+25. **【V1.6 优化】stocks.json扩展** → 从20只扩展到50只热门股票
 
 ---
 
@@ -407,7 +414,56 @@ npm run build && npx serve dist -l 3009
 
 **GitHub 仓库**: https://github.com/hongyuanzhang58-ctrl/priceaction-pro
 
-**部署状态**: ⚠️ 项目已构建，但尚未部署到 nginx
+**部署状态**: ✅ 已部署到Nginx，可通过 http://47.102.185.224 访问
+
+---
+
+## V1.6 更新 - 服务器部署与搜索修复
+
+### 服务器部署
+- **服务器**: 阿里云轻量服务器 (47.102.185.224)
+- **Web服务**: Nginx
+- **部署方式**: 本地构建 → scp同步到服务器
+
+### 搜索功能修复
+
+#### 问题1: 价格显示0.00
+**原因**: `LocalListDataSource`优先级最高，其`getStock`方法返回`price: 0`，系统不会尝试其他数据源。
+**解决**: 让`LocalListDataSource.getStock`返回`null`，由`EastMoneyDataSource`获取真实价格。
+
+#### 问题2: 搜索结果不稳定
+**原因**:
+- 输入时立即显示下拉框，但searchResults还是旧数据
+- 没有loading状态，用户看到"未找到"后才显示结果
+**解决**:
+- 添加`searchLoading`状态
+- 200ms防抖处理
+- 6位代码精确匹配，只显示完全对应的结果
+
+#### 问题3: CSS样式缺失
+**原因**: 纯CSS方案缺少部分Tailwind类
+**解决**: Header组件改用内联样式，确保渲染正确
+
+### 数据流程（修复后）
+```
+用户输入 002460
+→ Header 防抖200ms
+→ MultiSource.searchStocks 检测6位代码
+→ MultiSource.getStock
+  → LocalListDataSource.getStock 返回 null
+  → EastMoneyDataSource.getStock 调用东方财富API
+  → 返回真实价格 63.44 元
+→ Header 显示结果
+```
+
+### 当前限制
+- 名称搜索仅支持预定义的50只热门股票
+- 6位代码搜索支持全市场A股
+- 浏览器CORS限制，无法调用搜索API
+
+### 后续优化建议
+- 部署代理服务器支持全量搜索
+- 考虑使用SSR避免CORS问题
 
 ---
 

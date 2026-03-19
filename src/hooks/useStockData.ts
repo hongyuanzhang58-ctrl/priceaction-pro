@@ -67,18 +67,25 @@ export function useSearch() {
   const setSearchQuery = useStockStore((state) => state.setSearchQuery);
   const searchResults = useStockStore((state) => state.searchResults);
   const setSearchResults = useStockStore((state) => state.setSearchResults);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const search = useCallback(async (query: string) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const results = await realStockApi.searchStocks(query);
-      setSearchResults(results);
+      setSearchLoading(true);
+      try {
+        const results = await realStockApi.searchStocks(query);
+        setSearchResults(results);
+      } finally {
+        setSearchLoading(false);
+      }
     } else {
       setSearchResults([]);
+      setSearchLoading(false);
     }
   }, [setSearchQuery, setSearchResults]);
 
-  return { searchQuery, searchResults, search };
+  return { searchQuery, searchResults, searchLoading, search };
 }
 
 export function useWatchlist() {

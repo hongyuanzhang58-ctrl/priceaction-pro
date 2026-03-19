@@ -468,11 +468,18 @@ class EastMoneyDataSource extends DataSource {
     if (!query.trim()) return [];
 
     const trimmedQuery = query.trim();
+    console.log(`[EastMoney] 搜索: ${trimmedQuery}`);
 
     // 如果输入是6位数字，直接作为股票代码查询
     if (/^\d{6}$/.test(trimmedQuery)) {
+      console.log(`[EastMoney] 检测到6位代码，直接查询: ${trimmedQuery}`);
       const stock = await this.getStock(trimmedQuery);
-      return stock ? [stock] : [];
+      if (stock) {
+        console.log(`[EastMoney] 查询成功:`, stock);
+        return [stock];
+      }
+      console.log(`[EastMoney] 查询失败，无结果`);
+      return [];
     }
 
     // 如果输入是名称，尝试一些常见股票（硬编码列表用于演示）
@@ -495,6 +502,18 @@ class EastMoneyDataSource extends DataSource {
       '建设银行': '601939',
       '农业银行': '601288',
       '中国银行': '601988',
+      '赣锋锂业': '002460',
+      '天齐锂业': '002466',
+      '隆基绿能': '601012',
+      '通威股份': '600438',
+      '阳光电源': '300274',
+      '中芯国际': '688981',
+      '长城汽车': '601633',
+      '海尔智家': '600690',
+      '格力电器': '000651',
+      '中国中免': '601888',
+      '海天味业': '603288',
+      '金龙鱼': '300999',
     };
 
     const symbol = commonStocks[trimmedQuery];
@@ -908,80 +927,46 @@ class MultiSourceManager {
     const cacheKey = `search_${query}`;
     const cached = this.cache.get<Stock[]>(cacheKey);
     if (cached) {
-      console.log('[MultiSource] 返回缓存结果:', cached);
+      console.log('[MultiSource] 返回缓存结果');
       return cached;
     }
 
-    // 优先尝试本地股票列表（快速、支持全市场搜索）
+    const trimmedQuery = query.trim();
+
+    // 【核心优化】如果是6位数字代码，直接查询API（真实搜索）
+    if (/^\d{6}$/.test(trimmedQuery)) {
+      console.log('[MultiSource] 检测到6位代码，直接查询API:', trimmedQuery);
+      const stock = await this.getStock(trimmedQuery);
+      if (stock) {
+        console.log('[MultiSource] 代码查询成功:', stock);
+        this.cache.set(cacheKey, [stock]);
+        return [stock];
+      }
+      console.log('[MultiSource] 代码查询失败，无此股票');
+      return [];
+    }
+
+    // 名称搜索：使用本地列表（有限支持）
     const localSource = this.sources.find(s => s.name === '本地股票列表');
     if (localSource && localSource.enabled) {
-      console.log('[MultiSource] 使用本地股票列表搜索');
-      try {
-        const stocks = await this.queue.add(() => localSource.searchStocks(query));
-        console.log(`[MultiSource] 本地列表返回 ${stocks.length} 条结果`);
-        if (stocks.length > 0) {
-          // 获取完整行情数据（实时价格）
-          const fullResults: Stock[] = [];
-          for (const stock of stocks) {
-            try {
-              const fullStock = await this.getStock(stock.symbol);
-              if (fullStock) {
-                fullResults.push(fullStock);
-              } else {
-                fullResults.push(stock);
-              }
-            } catch {
-              fullResults.push(stock);
-            }
-          }
-          console.log('[MultiSource] 搜索结果:', fullResults);
-          this.cache.set(cacheKey, fullResults);
-          return fullResults;
-        }
-      } catch (error) {
-        console.warn('[MultiSource] 本地列表搜索失败:', error);
-      }
-    }
-
-    // 本地列表失败时，尝试其他数据源
-    console.log('[MultiSource] 本地列表不可用，尝试其他数据源');
-    const results: Stock[] = [];
-    const seenSymbols = new Set<string>();
-
-    for (const source of this.sources) {
-      if (!source.enabled || source.name === '本地股票列表') continue;
-
-      try {
-        const stocks = await this.queue.add(() => source.searchStocks(query));
-        for (const stock of stocks) {
-          if (!seenSymbols.has(stock.symbol)) {
-            seenSymbols.add(stock.symbol);
-            results.push(stock);
+      const stocks = await this.queue.add(() => localSource.searchStocks(query));
+      if (stocks.length > 0) {
+        // 获取完整行情数据
+        const fullResults: Stock[] = [];
+        for (const stock of stocks.slice(0, 5)) { // 限制5个结果
+          const fullStock = await this.getStock(stock.symbol);
+          if (fullStock) {
+            fullResults.push(fullStock);
+          } else {
+            fullResults.push(stock);
           }
         }
-        if (results.length >= 10) break;
-      } catch (error) {
-        console.warn(`[MultiSource] ${source.name} 搜索失败:`, error);
+        this.cache.set(cacheKey, fullResults);
+        return fullResults;
       }
     }
 
-    // 获取完整行情
-    const fullResults: Stock[] = [];
-    for (const stock of results) {
-      try {
-        const fullStock = await this.getStock(stock.symbol);
-        if (fullStock) {
-          fullResults.push(fullStock);
-        } else {
-          fullResults.push(stock);
-        }
-      } catch {
-        fullResults.push(stock);
-      }
-    }
-
-    this.cache.set(cacheKey, fullResults);
-    return fullResults;
+    return [];
   }
 
   // 获取热门板块

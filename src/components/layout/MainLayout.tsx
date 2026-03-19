@@ -10,6 +10,7 @@ interface MainLayoutProps {
   onTabChange: (tab: string) => void;
   watchlistCount?: number;
   searchResults?: Stock[];
+  searchLoading?: boolean;
   onSearch?: (query: string) => void;
   onSelectStock?: (symbol: string) => void;
 }
@@ -20,12 +21,18 @@ export function MainLayout({
   onTabChange,
   watchlistCount,
   searchResults,
+  searchLoading,
   onSearch,
   onSelectStock,
 }: MainLayoutProps) {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      <Header onSearch={onSearch} searchResults={searchResults} onSelectStock={onSelectStock} />
+      <Header
+        onSearch={onSearch}
+        searchResults={searchResults}
+        searchLoading={searchLoading}
+        onSelectStock={onSelectStock}
+      />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           activeTab={activeTab}
