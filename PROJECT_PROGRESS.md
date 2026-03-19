@@ -394,6 +394,23 @@ npm run build && npx serve dist -l 3009
 
 ---
 
+## 服务器部署信息
+
+**阿里云轻量服务器**:
+- **公网 IP**: 47.102.185.224
+- **用户名**: root
+- **SSH 命令**: `ssh -i ~/.ssh/aliyun_key.pem root@47.102.185.224`
+- **私钥路径**: `~/.ssh/aliyun_key.pem`（本地）
+- **项目路径**: `/home/admin/.openclaw/workspace/priceaction-pro`
+- **Nginx 目录**: `/etc/nginx/`
+- **Web 根目录**: `/usr/share/nginx/html/`
+
+**GitHub 仓库**: https://github.com/hongyuanzhang58-ctrl/priceaction-pro
+
+**部署状态**: ⚠️ 项目已构建，但尚未部署到 nginx
+
+---
+
 ## 恢复开发指南
 
 当你想继续这个项目时，告诉我：
